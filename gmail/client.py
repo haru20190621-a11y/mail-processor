@@ -13,6 +13,10 @@ from gmail.auth import load_credentials
 # ラベル名→IDのインメモリキャッシュ（API呼び出し削減）
 _label_id_cache: dict[str, str] = {}
 
+# Gmail service キャッシュ（token変更時は自動再構築）
+_service_cache = None
+_cached_token_hash: str | None = None
+
 
 @dataclass
 class EmailMessage:
@@ -28,10 +32,19 @@ class EmailMessage:
 
 
 def get_service():
+    """Gmail service を返す。tokenが更新された場合は自動的に再構築する。"""
+    global _service_cache, _cached_token_hash
     creds = load_credentials()
     if not creds:
+        _service_cache = None
+        _cached_token_hash = None
         raise RuntimeError("Gmail認証が必要です。/auth にアクセスしてください。")
-    return build("gmail", "v1", credentials=creds)
+    # tokenが変わった（更新された）場合のみ再構築
+    token_hash = creds.token[:16] if creds.token else ""
+    if _service_cache is None or token_hash != _cached_token_hash:
+        _service_cache = build("gmail", "v1", credentials=creds)
+        _cached_token_hash = token_hash
+    return _service_cache
 
 
 def fetch_unread_emails(max_results: int = 50) -> list[EmailMessage]:

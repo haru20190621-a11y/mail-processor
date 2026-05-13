@@ -56,6 +56,22 @@ def _create_flow() -> Flow:
 
 def _save_token(creds: Credentials) -> None:
     TOKEN_FILE.write_text(creds.to_json(), encoding="utf-8")
-    # Windowsでは読み取り専用に設定（他プロセスからの書き換え防止）
     import stat
-    TOKEN_FILE.chmod(stat.S_IRUSR | stat.S_IWUSR)
+    import platform
+    if platform.system() == "Windows":
+        # Windows: icacls で現在ユーザーのみアクセス可能に設定
+        import subprocess
+        try:
+            username = subprocess.check_output(
+                ["whoami"], text=True, stderr=subprocess.DEVNULL
+            ).strip()
+            subprocess.run(
+                ["icacls", str(TOKEN_FILE), "/inheritance:r",
+                 "/grant:r", f"{username}:(R,W)"],
+                check=True, capture_output=True,
+            )
+        except Exception:
+            pass  # 失敗しても動作は継続（権限設定は best-effort）
+    else:
+        # Unix/Mac: 所有者のみ読み書き可能
+        TOKEN_FILE.chmod(stat.S_IRUSR | stat.S_IWUSR)

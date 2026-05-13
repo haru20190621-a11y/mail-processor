@@ -67,16 +67,14 @@ def run_audit() -> dict:
 
 
 def _process_emails_list(emails: list[EmailMessage]) -> dict:
+    """監査バッチ用: ラベル付けのみ行い LINE通知は送らない（深夜大量通知防止）"""
     results = {"processed": 0, "errors": 0, "notified": 0}
     for msg in emails:
         try:
             result = classify_email(msg.subject, msg.sender, msg.body)
             apply_label(msg.id, result.label_name)
             apply_label(msg.id, config.LABELS["processed"])
-            if result.notify_line:
-                sent = send_notification(msg.subject, msg.sender, result.summary, result.category)
-                if sent:
-                    results["notified"] += 1
+            # 監査バッチでは通知しない
             results["processed"] += 1
             time.sleep(0.3)
         except Exception as e:

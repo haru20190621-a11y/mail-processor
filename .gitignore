@@ -1,6 +1,10 @@
 # 機密ファイル（絶対にGitHubにpushしない）
 .env
+.env.*
+!.env.example
 token.json
+*.token
+*.credentials
 
 # Python
 __pycache__/
@@ -17,7 +21,8 @@ test_gemini.py
 # cloudflaredバイナリ
 cloudflared.exe
 
-# ログ・レポート
-app.log
+# ログ・レポート（ローテーション後のバックアップも含めて全除外）
+*.log
+*.log.*
 report.html
 report.pdf

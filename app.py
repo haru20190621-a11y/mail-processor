@@ -5,6 +5,7 @@ import hmac
 import secrets
 import logging
 import threading
+from logging.handlers import RotatingFileHandler
 from functools import wraps
 
 from flask import Flask, redirect, request, jsonify, url_for, abort, session
@@ -24,12 +25,16 @@ if sys.stderr.encoding != "utf-8":
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # ── ロギング設定 ──────────────────────────────────────────
+# RotatingFileHandler: 1MB で新ファイル、3世代保持（古いログの無制限蓄積を防止）
+_file_handler = RotatingFileHandler(
+    "app.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8"
+)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
         logging.StreamHandler(sys.stdout),
-        logging.FileHandler("app.log", encoding="utf-8"),
+        _file_handler,
     ],
 )
 logger = logging.getLogger(__name__)
@@ -167,7 +172,7 @@ def line_webhook():
         if event.get("type") == "message" and event.get("message", {}).get("type") == "text":
             reply_token = event.get("replyToken")
             question = event["message"]["text"].strip()
-            logger.info(f"[LINE] 質問受信: {question[:50]}")
+            logger.info(f"[LINE] 質問受信: {len(question)}文字")
 
             # ③ 即座に「確認中」と返信（replyTokenは30秒で失効するため）
             reply_message(reply_token, "確認いたします。少々お待ちください！🔍")
