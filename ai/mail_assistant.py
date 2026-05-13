@@ -86,6 +86,8 @@ def answer_question(question: str) -> str:
             contents=f"質問: {question}\n\n{email_content}",
             config=types.GenerateContentConfig(system_instruction=_ANSWER_PROMPT),
         )
+        if not answer_response.text:
+            return "AIからの回答が取得できませんでした。"
         return answer_response.text.strip()
     except Exception as e:
         logger.error(f"回答生成失敗: {e}")

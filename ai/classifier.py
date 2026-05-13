@@ -76,6 +76,16 @@ def classify_email(subject: str, sender: str, body: str) -> ClassificationResult
         contents=user_message,
         config=types.GenerateContentConfig(system_instruction=_SYSTEM_PROMPT),
     )
+    # response.text が None の場合（ブロック・空レスポンス等）は安全にフォールバック
+    if not response.text:
+        logger.warning(f"[AI] Geminiから空レスポンス（ブロックされた可能性）: finish_reason={getattr(response, 'finish_reason', 'unknown')}")
+        return ClassificationResult(
+            category="fyi",
+            reason="AIレスポンスなし",
+            summary="",
+            notify_line=False,
+            label_name=config.LABELS["fyi"],
+        )
     raw = response.text.strip()
 
     # JSONブロックを抽出（```json...``` 形式にも対応）

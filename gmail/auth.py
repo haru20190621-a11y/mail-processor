@@ -1,5 +1,6 @@
 import json
 import os
+import logging
 from pathlib import Path
 
 from google.oauth2.credentials import Credentials
@@ -9,6 +10,29 @@ from google.auth.transport.requests import Request
 import config
 
 TOKEN_FILE = Path(__file__).parent.parent / "token.json"
+logger = logging.getLogger(__name__)
+
+
+def harden_token_permissions() -> None:
+    """token.json が存在する場合、所有者のみ読み書き可能にする（起動時に呼ぶ）"""
+    if not TOKEN_FILE.exists():
+        return
+    import platform, subprocess, stat
+    if platform.system() == "Windows":
+        try:
+            username = subprocess.check_output(
+                ["whoami"], text=True, stderr=subprocess.DEVNULL
+            ).strip()
+            subprocess.run(
+                ["icacls", str(TOKEN_FILE), "/inheritance:r",
+                 "/grant:r", f"{username}:(R,W)"],
+                check=True, capture_output=True,
+            )
+            logger.info("[auth] token.json の権限を所有者のみに設定しました")
+        except Exception as e:
+            logger.warning(f"[auth] token.json の権限設定失敗: {e}")
+    else:
+        TOKEN_FILE.chmod(stat.S_IRUSR | stat.S_IWUSR)
 
 
 def get_auth_url(state: str | None = None) -> str:

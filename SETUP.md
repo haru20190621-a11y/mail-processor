@@ -1,5 +1,15 @@
 # セットアップ手順
 
+## ⚠️ 重要：設置場所について
+
+**OneDriveフォルダ内にこのプロジェクトを置かないでください。**
+`.env`（全APIキー）と `token.json`（GmailのOAuthトークン）がMicrosoftのクラウドに
+自動同期され、情報漏洩の原因になります。
+
+推奨インストール先: `C:\Users\<ユーザー名>\projects\mail-processor`
+
+---
+
 ## 1. GCPでGmail APIを有効化
 
 1. https://console.cloud.google.com にアクセス
@@ -10,10 +20,10 @@
    - 承認済みリダイレクトURI: `http://localhost:5000/oauth/callback`
 5. 取得した **クライアントID** と **クライアントシークレット** をメモ
 
-## 2. Anthropic API キー取得
+## 2. Gemini API キー取得
 
-1. https://console.anthropic.com にアクセス
-2. 「API Keys」→「Create Key」
+1. https://aistudio.google.com にアクセス
+2. 「Get API key」→「Create API key」
 3. キーをメモ
 
 ## 3. LINE Messaging API 設定

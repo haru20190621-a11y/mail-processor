@@ -1,3 +1,4 @@
+import os
 import sys
 import base64
 import hashlib
@@ -5,13 +6,14 @@ import hmac
 import secrets
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from logging.handlers import TimedRotatingFileHandler
 from functools import wraps
 
 from flask import Flask, redirect, request, jsonify, url_for, abort, session
 
 import config
-from gmail.auth import get_auth_url, exchange_code, load_credentials
+from gmail.auth import get_auth_url, exchange_code, load_credentials, harden_token_permissions
 from gmail.client import ensure_labels_exist
 from tasks.processor import process_new_emails, run_audit
 from ai.mail_assistant import answer_question
@@ -62,8 +64,22 @@ def _validate_config():
 
 _validate_config()
 
+# ── OneDriveパス検出（機密ファイルがクラウド同期されるリスク） ──
+if "OneDrive" in os.path.abspath(__file__):
+    logging.getLogger(__name__).warning(
+        "⚠️ 危険: プロジェクトがOneDriveフォルダ内にあります。"
+        ".env と token.json がMicrosoftのクラウドに同期されている可能性があります。"
+        "プロジェクトを C:\\Users\\haru2\\projects\\mail-processor など"
+        "OneDriveの外のフォルダに移動することを強く推奨します。"
+    )
+
 app = Flask(__name__)
 app.secret_key = config.FLASK_SECRET_KEY
+# リクエストボディの最大サイズ制限（DoS対策: 1MB）
+app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024
+
+# LINE処理の同時実行数を制限（スレッド爆発防止: 最大3並列）
+_line_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="line_worker")
 
 
 # ── LINE Webhook 署名検証 ─────────────────────────────────
@@ -173,12 +189,17 @@ def line_webhook():
         if event.get("type") == "message" and event.get("message", {}).get("type") == "text":
             reply_token = event.get("replyToken")
             question = event["message"]["text"].strip()
+
+            # メッセージ長を制限（過大入力によるAPI負荷防止）
+            if len(question) > 500:
+                question = question[:500]
+                logger.info("[LINE] メッセージを500文字に切り詰め")
             logger.info(f"[LINE] 質問受信: {len(question)}文字")
 
             # ③ 即座に「確認中」と返信（replyTokenは30秒で失効するため）
             reply_message(reply_token, "確認いたします。少々お待ちください！🔍")
 
-            # ④ バックグラウンドで調査して push で送信
+            # ④ ThreadPoolExecutorで調査して push で送信（同時実行数を制限）
             def process_and_push(q=question, uid=user_id):
                 try:
                     answer = answer_question(q)
@@ -187,7 +208,7 @@ def line_webhook():
                     answer = "申し訳ありません。処理中にエラーが発生しました。"
                 push_message(uid, answer)
 
-            threading.Thread(target=process_and_push, daemon=True).start()
+            _line_executor.submit(process_and_push)
 
     return "OK", 200
 
@@ -226,6 +247,9 @@ def status():
 
 # ── 起動（127.0.0.1 のみ） ────────────────────────────────
 if __name__ == "__main__":
+    # 起動時にtoken.jsonの権限を毎回確認・修正
+    harden_token_permissions()
+
     if load_credentials():
         ensure_labels_exist()
         start_scheduler()
@@ -234,3 +258,4 @@ if __name__ == "__main__":
         app.run(host="127.0.0.1", port=5000, debug=False)
     finally:
         stop_scheduler()
+        _line_executor.shutdown(wait=False)
