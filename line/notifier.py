@@ -17,10 +17,10 @@ def send_notification(subject: str, sender: str, summary: str, category: str) ->
     emoji = "📛" if category == "urgent" else "📄"
     text = (
         f"{emoji} 重要メール通知\n"
-        f"件名: {subject}\n"
-        f"送信者: {sender}\n"
-        f"要約: {summary}"
-    )
+        f"件名: {subject[:100]}\n"
+        f"送信者: {sender[:100]}\n"
+        f"要約: {summary[:200]}"
+    )[:5000]
 
     headers = {
         "Authorization": f"Bearer {config.LINE_CHANNEL_ACCESS_TOKEN}",

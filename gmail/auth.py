@@ -59,8 +59,14 @@ def load_credentials() -> Credentials | None:
         return None
     creds = Credentials.from_authorized_user_file(str(TOKEN_FILE), config.GOOGLE_SCOPES)
     if creds and creds.expired and creds.refresh_token:
-        creds.refresh(Request())
-        _save_token(creds)
+        try:
+            creds.refresh(Request())
+            _save_token(creds)
+        except Exception as e:
+            logger.error(
+                f"[auth] トークンのリフレッシュに失敗しました。再認証が必要です: {e}"
+            )
+            return None
     return creds if creds and creds.valid else None
 
 

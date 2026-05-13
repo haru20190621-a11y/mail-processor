@@ -45,6 +45,8 @@ def answer_question(question: str) -> str:
             contents=f"質問: {question}",
             config=types.GenerateContentConfig(system_instruction=_SEARCH_PROMPT),
         )
+        if not search_response.text:
+            raise ValueError("Geminiから空レスポンス")
         raw = search_response.text.strip()
         if "```" in raw:
             raw = raw.split("```")[1].lstrip("json").strip()
