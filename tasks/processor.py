@@ -7,6 +7,7 @@ from gmail.client import (
     apply_label, mark_as_read, get_label_id_map,
 )
 from ai.classifier import classify_email
+from ai.reviewer import review_notification
 from line.notifier import send_notification
 import config
 
@@ -27,9 +28,15 @@ def process_new_emails() -> dict:
             mark_as_read(msg.id)  # 全カテゴリ既読化（再通知防止）
 
             if result.notify_line:
-                sent = send_notification(msg.subject, msg.sender, result.summary, result.category)
-                if sent:
-                    results["notified"] += 1
+                # 審査AIによる二重チェック（迷ったら却下）
+                approved = review_notification(
+                    msg.subject, msg.sender, msg.body,
+                    result.category, result.reason, result.summary,
+                )
+                if approved:
+                    sent = send_notification(msg.subject, msg.sender, result.summary, result.category)
+                    if sent:
+                        results["notified"] += 1
 
             results["processed"] += 1
             logger.info(f"[仕分け] {msg.subject[:40]} -> {result.label_name} ({result.reason})")
