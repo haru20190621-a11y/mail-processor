@@ -66,6 +66,11 @@ class ClassificationResult:
 # 【絶対通知しない】送信者ドメイン
 _NO_NOTIFY_DOMAINS = [
     "accountprotection.microsoft.com",  # Microsoftセキュリティ通知（大量）
+    "email2.microsoft.com",             # Microsoft Start ニュースダイジェスト
+    "email.microsoft.com",              # Microsoft マーケティングメール
+    "newsletters.microsoft.com",        # Microsoft ニュースレター
+    "news.google.com",                  # Google ニュースダイジェスト
+    "googlealerts-noreply@google.com",  # Google アラート
 ]
 
 # 【ログイン通知系】これらのドメインからのメールは
