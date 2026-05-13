@@ -5,7 +5,7 @@ import hmac
 import secrets
 import logging
 import threading
-from logging.handlers import RotatingFileHandler
+from logging.handlers import TimedRotatingFileHandler
 from functools import wraps
 
 from flask import Flask, redirect, request, jsonify, url_for, abort, session
@@ -25,9 +25,10 @@ if sys.stderr.encoding != "utf-8":
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # ── ロギング設定 ──────────────────────────────────────────
-# RotatingFileHandler: 1MB で新ファイル、3世代保持（古いログの無制限蓄積を防止）
-_file_handler = RotatingFileHandler(
-    "app.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8"
+# TimedRotatingFileHandler: 毎日深夜に新ファイル、7日間保持
+# RotatingFileHandlerはWindowsのファイルロック問題があるためこちらを使用
+_file_handler = TimedRotatingFileHandler(
+    "app.log", when="midnight", backupCount=7, encoding="utf-8"
 )
 logging.basicConfig(
     level=logging.INFO,
