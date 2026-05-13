@@ -15,6 +15,7 @@ GOOGLE_SCOPES = [
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+LINE_CHANNEL_SECRET = (os.getenv("LINE_CHANNEL_SECRET") or "").strip()
 LINE_USER_ID = (os.getenv("LINE_USER_ID") or "").strip()
 
 FLASK_SECRET_KEY = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")

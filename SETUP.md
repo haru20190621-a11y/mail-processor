@@ -20,8 +20,9 @@
 
 1. https://developers.line.biz にアクセス
 2. プロバイダー作成 → チャネル作成（Messaging API）
-3. 「チャネルアクセストークン（長期）」を発行 → メモ
-4. 自分のLINE User IDを確認（LINE Official Account Managerで確認可）
+3. 「チャネルシークレット」をメモ（セキュリティ > チャネルシークレット）
+4. 「チャネルアクセストークン（長期）」を発行 → メモ
+5. 自分のLINE User IDを確認（LINE Official Account Managerで確認可）
 
 ## 4. 環境変数ファイル作成
 

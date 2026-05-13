@@ -1,4 +1,7 @@
 import sys
+import base64
+import hashlib
+import hmac
 import secrets
 import logging
 import threading
@@ -43,7 +46,9 @@ def _validate_config():
     if config.POLLING_INTERVAL <= 0:
         errors.append("POLLING_INTERVAL は1以上の整数にしてください")
     if config.FLASK_SECRET_KEY == "dev-secret-change-me":
-        logger.warning("警告: FLASK_SECRET_KEY がデフォルト値のままです。.envで変更してください。")
+        logger.warning("警告: FLASK_SECRET_KEY がデフォルト値のままです。.envで安全なランダム値に変更してください。")
+    if not config.LINE_CHANNEL_SECRET:
+        logger.warning("警告: LINE_CHANNEL_SECRET が未設定です。LINE Webhookの署名検証が無効です。LINEデベロッパーコンソールから取得して.envに追加してください。")
     if errors:
         for e in errors:
             logger.error(f"設定エラー: {e}")
@@ -53,6 +58,21 @@ _validate_config()
 
 app = Flask(__name__)
 app.secret_key = config.FLASK_SECRET_KEY
+
+
+# ── LINE Webhook 署名検証 ─────────────────────────────────
+def _verify_line_signature(body: bytes, signature: str) -> bool:
+    """X-Line-Signature ヘッダーを HMAC-SHA256 で検証する"""
+    if not config.LINE_CHANNEL_SECRET:
+        logger.warning("[LINE] LINE_CHANNEL_SECRET 未設定 - 署名検証スキップ（危険）")
+        return False
+    hash_val = hmac.new(
+        config.LINE_CHANNEL_SECRET.encode("utf-8"),
+        body,
+        hashlib.sha256,
+    ).digest()
+    expected = base64.b64encode(hash_val).decode("utf-8")
+    return hmac.compare_digest(expected, signature)
 
 
 # ── セキュリティ：ローカルホスト限定ガード ────────────────
@@ -124,12 +144,24 @@ def oauth_callback():
 # ── LINE Webhook（双方向対応） ────────────────────────────
 @app.route("/line/webhook", methods=["POST"])
 def line_webhook():
+    # ① 署名検証（偽リクエスト防止）
+    signature = request.headers.get("X-Line-Signature", "")
+    raw_body = request.get_data()
+    if config.LINE_CHANNEL_SECRET:
+        if not _verify_line_signature(raw_body, signature):
+            logger.warning("[LINE] 署名検証失敗 - 不正なリクエストを拒否")
+            abort(400)
+    else:
+        logger.warning("[LINE] LINE_CHANNEL_SECRET未設定のため署名検証スキップ（要設定）")
+
     body = request.get_json(silent=True) or {}
     for event in body.get("events", []):
-        # User ID取得
         user_id = event.get("source", {}).get("userId", "")
-        if user_id:
-            logger.info(f"[LINE] User ID: {user_id}")
+
+        # ② 自分のLINEアカウントのみ処理（他ユーザーのアクセス防止）
+        if config.LINE_USER_ID and user_id != config.LINE_USER_ID:
+            logger.warning("[LINE] 未許可ユーザーからのメッセージをスキップ")
+            continue
 
         # テキストメッセージへの返信
         if event.get("type") == "message" and event.get("message", {}).get("type") == "text":
@@ -137,10 +169,10 @@ def line_webhook():
             question = event["message"]["text"].strip()
             logger.info(f"[LINE] 質問受信: {question[:50]}")
 
-            # ① 即座に「確認中」と返信（replyTokenは30秒で失効するため）
+            # ③ 即座に「確認中」と返信（replyTokenは30秒で失効するため）
             reply_message(reply_token, "確認いたします。少々お待ちください！🔍")
 
-            # ② バックグラウンドで調査して push で送信
+            # ④ バックグラウンドで調査して push で送信
             def process_and_push(q=question, uid=user_id):
                 try:
                     answer = answer_question(q)

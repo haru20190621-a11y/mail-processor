@@ -10,6 +10,9 @@ from google.oauth2.credentials import Credentials
 import config
 from gmail.auth import load_credentials
 
+# ラベル名→IDのインメモリキャッシュ（API呼び出し削減）
+_label_id_cache: dict[str, str] = {}
+
 
 @dataclass
 class EmailMessage:
@@ -147,13 +150,20 @@ def _extract_body(payload: dict) -> str:
 
 
 def _get_or_create_label(service, label_name: str) -> str:
+    """ラベルIDを取得（キャッシュ付き）。存在しない場合は作成する。"""
+    if label_name in _label_id_cache:
+        return _label_id_cache[label_name]
+
     labels_result = service.users().labels().list(userId="me").execute()
     for label in labels_result.get("labels", []):
+        _label_id_cache[label["name"]] = label["id"]  # まとめてキャッシュ
         if label["name"] == label_name:
             return label["id"]
+
     created = service.users().labels().create(
         userId="me",
         body={"name": label_name, "labelListVisibility": "labelShow",
               "messageListVisibility": "show"},
     ).execute()
+    _label_id_cache[label_name] = created["id"]
     return created["id"]
