@@ -48,10 +48,11 @@ def get_service():
 
 
 def fetch_unread_emails(max_results: int = 50) -> list[EmailMessage]:
+    """直近24時間の未読メールのみ取得（古いメールは監査バッチに任せる）"""
     service = get_service()
     results = service.users().messages().list(
         userId="me",
-        q="is:unread",
+        q="is:unread newer_than:1d",
         maxResults=max_results,
     ).execute()
     messages = results.get("messages", [])

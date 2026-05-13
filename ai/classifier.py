@@ -59,9 +59,67 @@ class ClassificationResult:
     label_name: str
 
 
-# LINE通知を送らない送信者ドメインリスト
+# ────────────────────────────────────────────────────────
+# コードレベルの通知制御ルール（AIの判断より優先）
+# ────────────────────────────────────────────────────────
+
+# 【絶対通知しない】送信者ドメイン
 _NO_NOTIFY_DOMAINS = [
-    "accountprotection.microsoft.com",  # Microsoftセキュリティ通知（大量に来るため）
+    "accountprotection.microsoft.com",  # Microsoftセキュリティ通知（大量）
+]
+
+# 【ログイン通知系】これらのドメインからのメールは
+#   危険ワードが本文にない限り notify_line を強制 false にする
+_LOGIN_NOTIFY_DOMAINS = [
+    "accounts.google.com",
+    "no-reply@accounts.google.com",
+    "google.com",
+    "x.com",
+    "twitter.com",
+    "facebook.com",
+    "instagram.com",
+    "apple.com",
+    "amazon.co.jp",
+    "amazon.com",
+    "microsoft.com",
+    "live.com",
+    "outlook.com",
+]
+
+# ログイン通知メールと判定する件名・本文キーワード
+_LOGIN_SUBJECT_KEYWORDS = [
+    "ログイン", "login", "サインイン", "sign in", "sign-in",
+    "new login", "新規ログイン", "新しいサインイン",
+    "security alert", "セキュリティ通知", "アクセス通知",
+    "new device", "新しいデバイス",
+]
+
+# これらが本文に含まれる場合のみ通知する（危険ワード）
+_DANGER_KEYWORDS = [
+    "不審", "不正", "異常", "ブロック", "停止", "凍結", "ロック",
+    "suspicious", "blocked", "unusual activity", "unauthorized",
+    "中国", "China", "韓国", "Korea", "ロシア", "Russia",
+    "アメリカ", "USA", "United States", "ドイツ", "Germany",
+    "フランス", "France", "ブラジル", "Brazil", "インド", "India",
+    "Vietnam", "ベトナム", "Nigeria", "Philippines",
+]
+
+# 【商用サービス系】件名に「重要」とあっても鵜呑みにしない送信者ドメイン
+# → urgent分類はされるが notify_line は危険ワードがない限り false
+_COMMERCIAL_DOMAINS = [
+    "mercari.com",       # メルカリ
+    "fril.jp",           # フリル
+    "yahoo.co.jp",       # Yahoo
+    "rakuten.co.jp",     # 楽天
+    "amazon.co.jp",      # Amazon
+    "paypay.ne.jp",      # PayPay
+    "line.me",           # LINE
+    "instagram.com",     # Instagram
+    "twitter.com",       # Twitter/X
+    "x.com",             # X
+    "tiktok.com",        # TikTok
+    "youtube.com",       # YouTube
+    "google.com",        # Google（プロモーション系）
 ]
 
 
@@ -115,12 +173,36 @@ def classify_email(subject: str, sender: str, body: str) -> ClassificationResult
 
     label_name = config.LABELS.get(category, config.LABELS["fyi"])
 
-    # AIの判断を使用（プロンプトで詳細ルールを指定済み）
+    # ── コードレベルの通知制御（AIより優先） ────────────────
     notify_line = bool(data.get("notify_line", False))
-    # 通知除外ドメインの場合は通知しない
-    if any(domain in sender for domain in _NO_NOTIFY_DOMAINS):
+    sender_lower = sender.lower()
+    body_lower = body.lower()
+    subject_lower = subject.lower()
+    combined = subject_lower + " " + body_lower
+
+    # ① 絶対通知しないドメイン
+    if any(domain in sender_lower for domain in _NO_NOTIFY_DOMAINS):
         notify_line = False
-        logger.info(f"[通知除外] {sender[:50]}")
+        logger.info(f"[通知除外:除外ドメイン] {sender[:50]}")
+
+    # ② ログイン通知系ドメイン + ログイン関連件名 → 危険ワードなければ通知しない
+    elif any(domain in sender_lower for domain in _LOGIN_NOTIFY_DOMAINS):
+        is_login_mail = any(kw in combined for kw in _LOGIN_SUBJECT_KEYWORDS)
+        if is_login_mail:
+            has_danger = any(kw.lower() in combined for kw in _DANGER_KEYWORDS)
+            if not has_danger:
+                notify_line = False
+                logger.info(f"[通知除外:ログイン通知] 危険ワードなし → 通知しない {sender[:40]}")
+            else:
+                notify_line = True
+                logger.info(f"[通知:ログイン通知] 危険ワード検出 → 通知する {sender[:40]}")
+
+    # ③ 商用サービス系 → urgent でも危険ワードなければ通知しない
+    elif category == "urgent" and any(domain in sender_lower for domain in _COMMERCIAL_DOMAINS):
+        has_danger = any(kw.lower() in combined for kw in _DANGER_KEYWORDS)
+        if not has_danger:
+            notify_line = False
+            logger.info(f"[通知除外:商用サービス] urgent但し危険ワードなし → 通知しない {sender[:40]}")
 
     return ClassificationResult(
         category=category,
