@@ -1,0 +1,23 @@
+# 機密ファイル（絶対にGitHubにpushしない）
+.env
+token.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# デバッグ用スクリプト
+check_env.py
+test_line.py
+test_gemini.py
+
+# cloudflaredバイナリ
+cloudflared.exe
+
+# ログ・レポート
+app.log
+report.html
+report.pdf
