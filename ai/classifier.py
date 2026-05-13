@@ -32,11 +32,15 @@ _SYSTEM_PROMPT = """あなたはビジネスオーナーのメール仕分けア
 }
 
 notify_line のルール（厳守）:
-- urgent: 基本 true。ただしログイン通知メールは以下で判断すること：
-  * メール本文に「日本」「Japan」「JP」が含まれる場合 → false（本人の可能性が高い）
-  * メール本文に日本以外の国名・地名（中国、China、アメリカ、USA、韓国、ロシア等）が含まれる場合 → true（海外からの不正アクセスの可能性）
-  * 「新規ログインがありました」だけで国情報がない場合 → false（判断不能のため通知しない）
-  * 「不審」「不正」「異常」「ブロック」などの危険ワードがある場合 → true
+- urgent かつ「ログイン・セキュリティ通知メール」の場合（件名や本文に「ログイン」「login」「新しいサインイン」「セキュリティ通知」「security alert」等が含まれる）:
+  * メール本文に明示的な国名・都市名・IPアドレスが含まれる場合のみ判断する:
+    - 「日本」「Japan」「JP」「東京」「大阪」等の日本の地名 → false（本人の可能性が高い）
+    - 中国・China・韓国・アメリカ・USA・ロシア・Russia 等の日本以外の国名・都市名 → true（海外からの不正アクセスの可能性）
+  * 「Edge」「Chrome」「Windows」「iPhone」「Android」「Safari」などはデバイス名・ブラウザ名であり場所ではない → 国情報の判断に使わないこと
+  * 国名・都市名・IPが明示されていない場合（デバイス名しかない等）→ false（場所不明のため通知しない）
+  * 「不審」「不正」「異常」「ブロック」「suspicious」「blocked」などの危険ワードが含まれる → true
+  * 「新規ログイン」「new login」だけで危険ワードも場所情報もない → false
+- urgent かつログイン・セキュリティ通知以外（クレーム、法的通知、緊急取引など） → true
 - contract: 新規契約・初回請求書・高額請求・重要な取引のみ true。定期購入の自動更新明細・少額の購入履歴・アプリ内課金の通知などルーティンな明細は false
 - reply / fyi / sales: 常に false
 
@@ -103,9 +107,6 @@ def classify_email(subject: str, sender: str, body: str) -> ClassificationResult
 
     # AIの判断を使用（プロンプトで詳細ルールを指定済み）
     notify_line = bool(data.get("notify_line", False))
-    # urgent は必ず通知（安全弁）
-    if category == "urgent":
-        notify_line = True
     # 通知除外ドメインの場合は通知しない
     if any(domain in sender for domain in _NO_NOTIFY_DOMAINS):
         notify_line = False
